@@ -61,48 +61,45 @@ export default function MarketplaceSearchResults({
           Сбросить поиск
         </button>
       </div>
-      <ul className="flex flex-col gap-2 sm:gap-3" role="list">
+      <ul
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        role="list"
+      >
         {results.map((store) => (
-          <li key={`${store.categoryId}-${store.id}`}>
+          <li key={`${store.categoryId}-${store.id}`} className="min-w-0">
             <Link
               href="/customer"
-              className="flex w-full gap-3 rounded-2xl border border-border-soft bg-card p-3 shadow-[var(--shadow-card)] transition-shadow duration-200 hover:shadow-[var(--shadow-card-hover)] sm:gap-4 sm:p-4"
+              className="flex h-full min-h-[4.25rem] w-full items-stretch overflow-hidden rounded-2xl border border-border-soft bg-card shadow-[var(--shadow-card)] transition-shadow duration-200 hover:shadow-[var(--shadow-card-hover)] sm:min-h-[4.75rem]"
             >
-              <div className="relative h-[4.5rem] w-[5.5rem] shrink-0 overflow-hidden rounded-xl bg-border-soft/50 sm:h-24 sm:w-32">
+              <div className="relative w-[6rem] shrink-0 self-stretch bg-border-soft/50 sm:w-[7rem]">
                 <Image
                   src={store.imageUrl}
                   alt={store.name}
                   fill
                   className="object-cover"
-                  sizes="128px"
+                  sizes="(max-width: 640px) 20vw, (max-width: 1024px) 25vw, 120px"
                 />
               </div>
-              <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-                <p className="text-xs font-medium text-primary">
+              <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 py-2.5 pl-3 pr-2.5 sm:py-3 sm:pr-3">
+                <p className="line-clamp-1 text-[11px] font-medium text-primary sm:text-xs">
                   {store.categoryTitle}
                 </p>
-                <h3 className="truncate text-base font-semibold text-foreground sm:text-lg">
+                <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:text-[15px]">
                   {store.name}
                 </h3>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:text-sm">
-                  <span className="inline-flex items-center gap-1 font-medium text-foreground/80">
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted sm:text-xs">
+                  <span className="inline-flex items-center gap-0.5 font-medium text-foreground/80">
                     <i
-                      className="fas fa-star text-[11px] text-amber-400"
+                      className="fas fa-star text-[10px] text-amber-400"
                       aria-hidden
                     />
                     {store.rating.toFixed(1)}
                   </span>
-                  <span className="inline-flex items-center gap-1">
-                    <i className="fas fa-clock text-[11px]" aria-hidden />
+                  <span className="inline-flex items-center gap-0.5">
+                    <i className="fas fa-clock text-[10px]" aria-hidden />
                     {store.deliveryEtaMin} мин
                   </span>
                 </div>
-              </div>
-              <div className="hidden shrink-0 self-center sm:flex">
-                <i
-                  className="fas fa-chevron-right text-muted"
-                  aria-hidden
-                />
               </div>
             </Link>
           </li>

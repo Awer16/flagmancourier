@@ -65,6 +65,12 @@ export default function HomePageContent(): React.ReactElement {
                 subtitle={cat.subtitle}
                 stores={cat.stores}
                 layoutSplit={index % 2 === 1}
+                onApplyCategorySearch={(text) => {
+                  setQuery(text);
+                  if (typeof window !== "undefined") {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }
+                }}
               />
             ))
           )}

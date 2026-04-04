@@ -19,7 +19,7 @@ export default function StoreCardTile({
             src={store.imageUrl}
             alt={store.name}
             fill
-            sizes="(max-width: 640px) 45vw, 22vw"
+            sizes="(max-width: 640px) 46vw, 22vw"
             className="object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
