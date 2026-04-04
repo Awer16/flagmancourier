@@ -1,21 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import CompanyMenuShop from "@/components/customer/company-menu-shop";
 import SiteContentContainer from "@/components/layout/site-content-container";
 import { getCompanyById } from "@/lib/mock-companies";
-import type { MenuItem } from "@/shared/types/customer";
 
 interface CompanyMenuPageProps {
   params: Promise<{ companyId: string }>;
-}
-
-function groupByCategory(items: MenuItem[]): Map<string, MenuItem[]> {
-  const map = new Map<string, MenuItem[]>();
-  for (const item of items) {
-    const list = map.get(item.category) ?? [];
-    list.push(item);
-    map.set(item.category, list);
-  }
-  return map;
 }
 
 export default async function CompanyMenuPage({
@@ -26,7 +16,6 @@ export default async function CompanyMenuPage({
   if (!company) {
     notFound();
   }
-  const grouped = groupByCategory(company.menu);
 
   return (
     <main className="flex-1 pb-8 pt-20">
@@ -49,38 +38,8 @@ export default async function CompanyMenuPage({
               {company.address}
             </p>
           </header>
-          <div className="mt-6 flex flex-col gap-8">
-            {[...grouped.entries()].map(([category, items]) => (
-              <section key={category}>
-                <h2 className="font-heading text-lg font-semibold text-foreground">
-                  {category}
-                </h2>
-                <ul className="mt-3 flex flex-col gap-3">
-                  {items.map((item) => (
-                    <li
-                      key={item.id}
-                      className="rounded-2xl border border-border-soft bg-card p-4 shadow-[var(--shadow-card)]"
-                    >
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <h3 className="font-medium text-foreground">
-                            {item.name}
-                          </h3>
-                          {item.description ? (
-                            <p className="mt-1 text-sm text-muted">
-                              {item.description}
-                            </p>
-                          ) : null}
-                        </div>
-                        <p className="shrink-0 text-lg font-semibold text-primary">
-                          {item.price} ₽
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+          <div className="mt-6">
+            <CompanyMenuShop menu={company.menu} />
           </div>
         </div>
       </SiteContentContainer>

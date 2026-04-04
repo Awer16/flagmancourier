@@ -80,21 +80,23 @@ function SplitCategoryIntro({
         </button>
       </div>
       <div
-        className={`mt-2 hidden gap-3 lg:mt-0 lg:grid lg:gap-4 ${
-          metrics ? "lg:grid-cols-3" : "lg:grid-cols-1 lg:max-w-xs"
-        }`}
+        className={
+          metrics
+            ? "mt-2 hidden gap-3 lg:mt-0 lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-4"
+            : "mt-2 hidden flex-col gap-3 lg:mt-0 lg:flex lg:gap-4"
+        }
       >
         <button
           type="button"
           onClick={() => onApplyCategorySearch(title)}
-          className="flex min-h-[6.25rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-border-soft bg-border-soft/15 px-2 py-3 text-center text-[11px] font-semibold leading-snug text-foreground transition-colors hover:border-primary hover:text-primary sm:text-xs lg:text-[13px]"
+          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-border-soft bg-border-soft/15 px-3 py-3.5 text-center text-xs font-semibold leading-snug text-foreground transition-colors hover:border-primary hover:text-primary sm:text-[13px] lg:h-full lg:min-h-0"
         >
-          <span>{searchCtaLabel}</span>
+          <span className="max-w-full">{searchCtaLabel}</span>
           <i className="fas fa-magnifying-glass text-sm text-primary" aria-hidden />
         </button>
         {metrics ? (
-          <>
-            <dl className="rounded-xl border border-border-soft bg-border-soft/15 px-3 py-3.5">
+          <div className="flex min-h-0 w-full flex-col gap-3 lg:gap-4">
+            <dl className="w-full rounded-xl border border-border-soft bg-border-soft/15 px-3 py-3.5">
               <dt className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 <i className="fas fa-star text-[13px] text-primary" aria-hidden />
                 Средняя оценка
@@ -103,7 +105,7 @@ function SplitCategoryIntro({
                 {metrics.avgRating.toFixed(1)}
               </dd>
             </dl>
-            <dl className="rounded-xl border border-border-soft bg-border-soft/15 px-3 py-3.5">
+            <dl className="w-full rounded-xl border border-border-soft bg-border-soft/15 px-3 py-3.5">
               <dt className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 <i className="fas fa-clock text-[13px] text-primary" aria-hidden />
                 Доставка
@@ -112,7 +114,7 @@ function SplitCategoryIntro({
                 от {metrics.minEta} мин
               </dd>
             </dl>
-          </>
+          </div>
         ) : null}
       </div>
     </div>
@@ -415,18 +417,22 @@ export default function StoreCategorySection({
   if (layoutSplit) {
     return (
       <section
-        className="mt-5 mb-9 rounded-2xl border border-border-soft/50 bg-primary/5 px-3 py-5 sm:mb-11 sm:px-5 sm:py-6 lg:border-border-soft/60 lg:px-8 lg:py-7"
+        className="mx-auto mt-5 mb-9 w-full max-w-[1000px] rounded-2xl border border-border-soft/50 bg-primary/5 px-3 py-5 sm:mb-11 sm:px-5 sm:py-6 lg:border-border-soft/60 lg:px-8 lg:py-7"
         aria-labelledby={headingId}
       >
-        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-stretch lg:gap-8">
-          <SplitCategoryIntro
-            headingId={headingId}
-            title={title}
-            subtitle={subtitle}
-            stores={stores}
-            onApplyCategorySearch={onApplyCategorySearch}
-          />
-          <div className="min-w-0">{sliderBlock}</div>
+        <div className="flex w-full flex-col items-center gap-4 lg:flex-row lg:items-stretch lg:justify-center lg:gap-8">
+          <div className="w-full min-w-0 max-w-sm sm:max-w-md">
+            <SplitCategoryIntro
+              headingId={headingId}
+              title={title}
+              subtitle={subtitle}
+              stores={stores}
+              onApplyCategorySearch={onApplyCategorySearch}
+            />
+          </div>
+          <div className="mx-auto w-full min-w-0 max-w-[33rem] shrink-0">
+            {sliderBlock}
+          </div>
         </div>
       </section>
     );

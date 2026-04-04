@@ -1,9 +1,95 @@
+import type { Company } from "@/shared/types/customer";
 import type {
+  HomeStore,
   HomeStoreCategory,
   HomeStoreWithCategory,
 } from "@/shared/types/home-marketplace";
+import { haversineKm } from "@/lib/geo";
+import { menuForFeaturedStoreId } from "@/lib/home-featured-store-menus";
+import { getCityById, RUSSIAN_CITIES } from "@/lib/russian-cities";
 
-export const HOME_FEATURED_CATEGORIES: HomeStoreCategory[] = [
+const DEFAULT_NEARBY_MAX_KM = 18;
+
+export { haversineKm } from "@/lib/geo";
+
+const CUISINE_BY_CATEGORY: Record<string, string> = {
+  fastfood: "Фастфуд",
+  restaurants: "Ресторан",
+  electronics: "Электроника",
+  diy: "Товары для дома",
+  groceries: "Продукты",
+  "office-gifts": "Канцтовары и подарки",
+  coffee: "Кофейня",
+  "rostov-don": "Юг России",
+};
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = Math.imul(31, h) + s.charCodeAt(i);
+  }
+  return Math.abs(h);
+}
+
+function offsetCoords(
+  cityId: string,
+  storeId: string,
+): { lat: number; lon: number } {
+  const city = getCityById(cityId);
+  if (!city) {
+    return { lat: 55.7522, lon: 37.6156 };
+  }
+  const h = hashString(storeId);
+  const dLat = ((h % 200) - 100) / 4500;
+  const dLon = (((h >> 9) % 200) - 100) / 4500;
+  return { lat: city.lat + dLat, lon: city.lon + dLon };
+}
+
+function cityIdForFeaturedStore(storeId: string): string {
+  const h = hashString(storeId) % 100;
+  if (h < 34) {
+    return "msk";
+  }
+  if (h < 58) {
+    return "spb";
+  }
+  const idx = hashString(`${storeId}:geo`) % RUSSIAN_CITIES.length;
+  return RUSSIAN_CITIES[idx]!.id;
+}
+
+interface HomeStoreSeed {
+  id: string;
+  name: string;
+  imageUrl: string;
+  deliveryEtaMin: number;
+  rating: number;
+  cityId?: string;
+}
+
+interface HomeStoreCategorySeed {
+  id: string;
+  title: string;
+  subtitle: string;
+  stores: HomeStoreSeed[];
+}
+
+function buildHomeStore(seed: HomeStoreSeed, categoryId: string): HomeStore {
+  const cityId = seed.cityId ?? cityIdForFeaturedStore(seed.id);
+  const city = getCityById(cityId);
+  const { lat, lon } = offsetCoords(cityId, seed.id);
+  const streetNum = (hashString(seed.id) % 90) + 1;
+  return {
+    ...seed,
+    cityId,
+    lat,
+    lon,
+    address: `${city?.name ?? "Россия"}, ул. Доставки, д. ${streetNum}`,
+    description: `Доставка из заведения «${seed.name}»`,
+    cuisine: CUISINE_BY_CATEGORY[categoryId] ?? "Кухня",
+  };
+}
+
+const HOME_FEATURED_CATEGORY_SEEDS: HomeStoreCategorySeed[] = [
   {
     id: "fastfood",
     title: "Фастфуд",
@@ -285,7 +371,91 @@ export const HOME_FEATURED_CATEGORIES: HomeStoreCategory[] = [
       },
     ],
   },
+  {
+    id: "rostov-don",
+    title: "Ростов-на-Дону",
+    subtitle: "Локальные заведения",
+    stores: [
+      {
+        id: "rnd-don-1",
+        name: "Донская шашлычная",
+        imageUrl:
+          "https://placehold.co/360x200/fed7aa/c2410c/png?text=Don+BBQ",
+        deliveryEtaMin: 35,
+        rating: 4.8,
+        cityId: "rnd",
+      },
+      {
+        id: "rnd-don-2",
+        name: "Пельменная «Садовая»",
+        imageUrl:
+          "https://placehold.co/360x200/e0e7ff/1e3a8a/png?text=Pelmeni",
+        deliveryEtaMin: 28,
+        rating: 4.7,
+        cityId: "rnd",
+      },
+    ],
+  },
 ];
+
+export const HOME_FEATURED_CATEGORIES: HomeStoreCategory[] =
+  HOME_FEATURED_CATEGORY_SEEDS.map((cat) => ({
+    id: cat.id,
+    title: cat.title,
+    subtitle: cat.subtitle,
+    stores: cat.stores.map((s) => buildHomeStore(s, cat.id)),
+  }));
+
+export function featuredStoreToCompany(store: HomeStore): Company {
+  return {
+    id: store.id,
+    name: store.name,
+    description: store.description,
+    lat: store.lat,
+    lon: store.lon,
+    address: store.address,
+    cuisine: store.cuisine,
+    deliveryEtaMin: store.deliveryEtaMin,
+    cityId: store.cityId,
+    menu: menuForFeaturedStoreId(store.id),
+  };
+}
+
+export function getFeaturedStoreById(id: string): HomeStore | undefined {
+  for (const cat of HOME_FEATURED_CATEGORIES) {
+    const found = cat.stores.find((s) => s.id === id);
+    if (found) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
+export function getFeaturedAsCompanyById(id: string): Company | undefined {
+  const store = getFeaturedStoreById(id);
+  return store ? featuredStoreToCompany(store) : undefined;
+}
+
+export function getNearbyCompaniesFromFeatured(
+  userLat: number,
+  userLon: number,
+  userCityId: string,
+  maxKm: number = DEFAULT_NEARBY_MAX_KM,
+  limit = 40,
+): Company[] {
+  const flat = flattenFeaturedStores();
+  const rows = flat
+    .filter((s) => s.cityId === userCityId)
+    .map((s) => ({
+      company: featuredStoreToCompany(s),
+      km: haversineKm(userLat, userLon, s.lat, s.lon),
+    }))
+    .filter((r) => r.km <= maxKm)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, limit)
+    .map((r) => r.company);
+  return rows;
+}
 
 export function flattenFeaturedStores(): HomeStoreWithCategory[] {
   return HOME_FEATURED_CATEGORIES.flatMap((cat) =>
@@ -305,9 +475,12 @@ export function filterStoresByQuery(
   if (!q) {
     return [];
   }
-  return list.filter(
-    (s) =>
+  return list.filter((s) => {
+    const cityName = getCityById(s.cityId)?.name.toLocaleLowerCase("ru-RU") ?? "";
+    return (
       s.name.toLocaleLowerCase("ru-RU").includes(q) ||
-      s.categoryTitle.toLocaleLowerCase("ru-RU").includes(q),
-  );
+      s.categoryTitle.toLocaleLowerCase("ru-RU").includes(q) ||
+      (cityName.length > 0 && cityName.includes(q))
+    );
+  });
 }

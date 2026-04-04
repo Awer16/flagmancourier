@@ -35,7 +35,10 @@ interface CustomerAddressContextValue {
   setLocation: (next: DeliveryLocation) => void;
   setCoords: (lat: number, lon: number) => void;
   setLabel: (label: string) => void;
-  setCityId: (id: string) => void;
+  setCityId: (
+    id: string,
+    options?: { preserveCoords?: boolean },
+  ) => void;
 }
 
 const CustomerAddressContext = createContext<
@@ -136,18 +139,24 @@ export function CustomerAddressProvider({
     setLocationState((prev) => ({ ...prev, label }));
   }, []);
 
-  const setCityId = useCallback((id: string) => {
-    const city = getCityById(id);
-    if (!city) {
-      return;
-    }
-    setCityIdState(id);
-    setLocationState((prev) => ({
-      ...prev,
-      lat: city.lat,
-      lon: city.lon,
-    }));
-  }, []);
+  const setCityId = useCallback(
+    (id: string, options?: { preserveCoords?: boolean }) => {
+      const city = getCityById(id);
+      if (!city) {
+        return;
+      }
+      setCityIdState(id);
+      if (options?.preserveCoords) {
+        return;
+      }
+      setLocationState((prev) => ({
+        ...prev,
+        lat: city.lat,
+        lon: city.lon,
+      }));
+    },
+    [],
+  );
 
   const value = useMemo(
     () => ({

@@ -4,6 +4,12 @@ export interface HomeStore {
   imageUrl: string;
   deliveryEtaMin: number;
   rating: number;
+  cityId: string;
+  lat: number;
+  lon: number;
+  address: string;
+  description: string;
+  cuisine: string;
 }
 
 export interface HomeStoreCategory {

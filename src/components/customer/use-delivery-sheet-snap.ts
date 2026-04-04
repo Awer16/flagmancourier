@@ -10,14 +10,14 @@ import {
 } from "react";
 
 const HEADER_PX = 56;
-const PEEK_PX = 56;
+const PEEK_PX = 96;
 const DRAG_THRESHOLD_PX = 12;
 
 export type SheetSnap = 0 | 1 | 2;
 
 function computeHeights(): [number, number, number] {
   if (typeof window === "undefined") {
-    return [56, 420, 720];
+    return [96, 420, 720];
   }
   const vh = window.innerHeight;
   const avail = Math.max(180, vh - HEADER_PX);
@@ -58,10 +58,12 @@ export function useDeliverySheetSnap(): {
   handlePointerCancel: (e: PointerEvent<HTMLElement>) => void;
   onHandleClick: () => void;
   contentHidden: boolean;
+  collapseToPeek: () => void;
+  snapTo: (next: SheetSnap) => void;
 } {
   const [snap, setSnap] = useState<SheetSnap>(1);
   const [heights, setHeights] = useState<[number, number, number]>([
-    56, 420, 720,
+    96, 420, 720,
   ]);
   const [dragging, setDragging] = useState(false);
   const [liveHeight, setLiveHeight] = useState<number | null>(null);
@@ -176,6 +178,20 @@ export function useDeliverySheetSnap(): {
     setSnap((s) => ((s + 1) % 3) as SheetSnap);
   }, []);
 
+  const collapseToPeek = useCallback(() => {
+    liveHeightRef.current = null;
+    setLiveHeight(null);
+    setDragging(false);
+    setSnap(0);
+  }, []);
+
+  const snapTo = useCallback((next: SheetSnap) => {
+    liveHeightRef.current = null;
+    setLiveHeight(null);
+    setDragging(false);
+    setSnap(next);
+  }, []);
+
   return {
     snap,
     snapHeights: heights,
@@ -187,5 +203,7 @@ export function useDeliverySheetSnap(): {
     handlePointerCancel,
     onHandleClick,
     contentHidden,
+    collapseToPeek,
+    snapTo,
   };
 }

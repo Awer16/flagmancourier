@@ -89,7 +89,7 @@ export default function CityPickerModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-colors hover:bg-gray-100 hover:text-foreground"
+            className="flex h-10 w-10 items-center cursor-pointer justify-center rounded-xl text-muted transition-colors hover:bg-gray-100 hover:text-foreground"
             aria-label="Закрыть"
           >
             <i className="fas fa-xmark text-lg" aria-hidden />
@@ -108,7 +108,7 @@ export default function CityPickerModal({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Начните вводить название…"
               autoComplete="off"
-              className="w-full rounded-xl border border-border-soft bg-white py-2.5 pl-10 pr-3 text-base text-foreground outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/40"
+              className="w-full rounded-xl border border-border-soft bg-background py-2.5 pl-10 pr-3 text-base text-foreground placeholder:text-muted outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/40"
             />
           </div>
         </div>
@@ -130,10 +130,10 @@ export default function CityPickerModal({
                     role="option"
                     aria-selected={active}
                     onClick={() => handlePick(city.id)}
-                    className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-base transition-colors ${
+                    className={`flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-3 text-left text-base transition-colors ${
                       active
                         ? "bg-primary/15 font-medium text-foreground"
-                        : "text-foreground hover:bg-gray-50"
+                        : "text-foreground hover:bg-border-soft/40"
                     }`}
                   >
                     <span>{city.name}</span>

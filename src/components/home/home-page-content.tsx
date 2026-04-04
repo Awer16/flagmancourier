@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import HomeMarketplaceSearchField from "@/components/home/home-marketplace-search-field";
 import MarketplaceSearchResults from "@/components/home/marketplace-search-results";
 import StoreCategorySection from "@/components/home/store-category-section";
-import ThemeSwitcher from "@/components/theme/theme-switcher";
+import HeaderAuthCluster from "@/components/home/header-auth-cluster";
 import SiteContentContainer from "@/components/layout/site-content-container";
 import {
   filterStoresByQuery,
@@ -31,10 +31,10 @@ export default function HomePageContent(): React.ReactElement {
               href="/"
               className="font-heading text-xl font-bold tracking-tight text-foreground transition-colors hover:text-primary sm:text-2xl"
             >
-              Courier.Here
+              Курьер.Тут
             </Link>
             <div className="ml-auto sm:hidden">
-              <ThemeSwitcher />
+              <HeaderAuthCluster />
             </div>
           </div>
           <HomeMarketplaceSearchField
@@ -42,8 +42,8 @@ export default function HomePageContent(): React.ReactElement {
             onQueryChange={setQuery}
             className="w-full sm:max-w-xl lg:max-w-2xl"
           />
-          <div className="hidden sm:ml-auto sm:block sm:shrink-0">
-            <ThemeSwitcher />
+          <div className="hidden sm:ml-auto sm:flex sm:shrink-0 sm:items-center">
+            <HeaderAuthCluster />
           </div>
         </div>
       </header>

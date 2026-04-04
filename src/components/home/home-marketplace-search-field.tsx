@@ -19,7 +19,7 @@ export default function HomeMarketplaceSearchField({
         Поиск магазина
       </label>
       <i
-        className="fas fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted"
+        className="fas fa-magnifying-glass pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-md text-muted"
         aria-hidden
       />
       <input
@@ -32,7 +32,7 @@ export default function HomeMarketplaceSearchField({
         onChange={(e) => onQueryChange(e.target.value)}
         placeholder="Название магазина или категории…"
         autoComplete="off"
-        className="w-full rounded-xl border border-border-soft bg-card py-2.5 pl-10 pr-11 text-base text-foreground outline-none transition-shadow placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/40 sm:py-3"
+        className="w-full rounded-full border border-border-soft bg-card py-2.5 pl-10 pr-11 text-base text-foreground outline-none transition-shadow placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/40 sm:py-3"
       />
       {query ? (
         <button

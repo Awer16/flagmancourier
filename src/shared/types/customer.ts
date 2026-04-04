@@ -4,6 +4,8 @@ export interface MenuItem {
   price: number;
   description?: string;
   category: string;
+  imageUrl?: string;
+  oldPrice?: number;
 }
 
 export interface Company {
@@ -16,6 +18,7 @@ export interface Company {
   cuisine: string;
   deliveryEtaMin: number;
   menu: MenuItem[];
+  cityId: string;
 }
 
 export interface DeliveryLocation {

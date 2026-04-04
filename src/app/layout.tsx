@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Jost, Unbounded } from "next/font/google";
+import { CustomerAddressProvider } from "@/components/customer/customer-address-provider";
+import SessionProvider from "@/components/session/session-provider";
 import { ThemeProvider } from "@/components/theme/theme-context";
 import "./globals.css";
 
@@ -40,7 +42,11 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-full flex-col font-sans">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <CustomerAddressProvider>
+            <SessionProvider>{children}</SessionProvider>
+          </CustomerAddressProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

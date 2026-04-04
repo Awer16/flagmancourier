@@ -55,7 +55,7 @@ export default function MarketplaceSearchResults({
         <button
           type="button"
           onClick={onClear}
-          className="inline-flex w-fit items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary-hover"
+          className="inline-flex w-fit items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary-hover cursor-pointer"
         >
           <i className="fas fa-xmark text-xs" aria-hidden />
           Сбросить поиск

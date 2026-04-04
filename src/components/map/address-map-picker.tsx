@@ -11,6 +11,7 @@ interface AddressMapPickerProps {
   zoom: number;
   cityId: string;
   onLocationChange: (lat: number, lon: number) => void;
+  onMapClick?: (lat: number, lon: number) => void;
   className?: string;
 }
 
@@ -35,18 +36,24 @@ export default function AddressMapPicker({
   zoom,
   cityId,
   onLocationChange,
+  onMapClick,
   className,
 }: AddressMapPickerProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const onLocationChangeRef = useRef(onLocationChange);
+  const onMapClickRef = useRef(onMapClick);
   const initialView = useRef({ lat, lon, zoom });
   const prevCityIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     onLocationChangeRef.current = onLocationChange;
   }, [onLocationChange]);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -69,6 +76,7 @@ export default function AddressMapPicker({
     map.on("click", (e) => {
       const { lat: nextLat, lng: nextLon } = e.latlng;
       onLocationChangeRef.current(nextLat, nextLon);
+      onMapClickRef.current?.(nextLat, nextLon);
     });
     const invalidate = (): void => {
       map.invalidateSize();
