@@ -4,7 +4,9 @@ import ProfileModal from "@/components/session/profile-modal";
 import {
   SessionContext,
   type SessionContextValue,
+  type UserProfile,
 } from "@/components/session/session-context";
+import { authApi } from "@/lib/api-client";
 import { normalizePhoneDigits } from "@/lib/phone-format";
 import {
   useCallback,
@@ -48,6 +50,7 @@ export default function SessionProvider({
   children: React.ReactNode;
 }): React.ReactElement {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [phoneDigits, setPhoneDigits] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -59,28 +62,105 @@ export default function SessionProvider({
     setHydrated(true);
   }, []);
 
+  // Если есть сессия — пробуем получить данные с бэкенда
   useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
+    if (!hydrated || !isLoggedIn) return;
+    refreshUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, isLoggedIn]);
+
+  useEffect(() => {
+    if (!hydrated) return;
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ isLoggedIn, phoneDigits }),
+        JSON.stringify({ isLoggedIn, phoneDigits })
       );
     } catch {
       /* ignore */
     }
   }, [isLoggedIn, phoneDigits, hydrated]);
 
-  const login = useCallback(() => {
-    setIsLoggedIn(true);
+  const refreshUser = useCallback(async () => {
+    try {
+      const me = await authApi.getMe();
+      setUser({
+        id: me.id,
+        email: me.email,
+        fullName: me.full_name,
+        phone: me.phone,
+        role: me.role,
+      });
+      setIsLoggedIn(true);
+    } catch {
+      // Сессия невалидна — разлогиниваем
+      setIsLoggedIn(false);
+      setUser(null);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
   }, []);
 
-  const logout = useCallback(() => {
+  const login = useCallback(
+    async (email: string, password: string): Promise<boolean> => {
+      try {
+        await authApi.login(email, password);
+        setIsLoggedIn(true);
+        await refreshUser();
+        return true;
+      } catch (e) {
+        console.error("Login failed:", e);
+        return false;
+      }
+    },
+    [refreshUser]
+  );
+
+  const register = useCallback(
+    async (data: {
+      email: string;
+      password: string;
+      fullName?: string;
+      phone?: string;
+      role?: string;
+    }): Promise<boolean> => {
+      try {
+        const result = await authApi.register({
+          email: data.email,
+          password: data.password,
+          full_name: data.fullName,
+          phone: data.phone,
+          role: (data.role as any) || "customer",
+        });
+        setIsLoggedIn(true);
+        await refreshUser();
+        return true;
+      } catch (e) {
+        console.error("Register failed:", e);
+        return false;
+      }
+    },
+    [refreshUser]
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      /* ignore */
+    }
     setIsLoggedIn(false);
+    setUser(null);
     setPhoneDigits("");
     setProfileOpen(false);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const openProfile = useCallback(() => {
@@ -98,24 +178,30 @@ export default function SessionProvider({
   const value = useMemo<SessionContextValue>(
     () => ({
       isLoggedIn,
+      user,
       phoneDigits,
       profileOpen,
       login,
+      register,
       logout,
       openProfile,
       closeProfile,
       saveSessionPhone,
+      refreshUser,
     }),
     [
       isLoggedIn,
+      user,
       phoneDigits,
       profileOpen,
       login,
+      register,
       logout,
       openProfile,
       closeProfile,
       saveSessionPhone,
-    ],
+      refreshUser,
+    ]
   );
 
   return (

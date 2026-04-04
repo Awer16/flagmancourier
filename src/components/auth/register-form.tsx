@@ -12,23 +12,53 @@ const labelClass = "text-sm font-medium text-foreground";
 
 export default function RegisterForm(): React.ReactElement {
   const router = useRouter();
-  const { login } = useSession();
+  const { register } = useSession();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordRepeat, setPasswordRepeat] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const onSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
+    async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      login();
-      router.push("/");
+      setError("");
+
+      if (password.length < 6) {
+        setError("Пароль должен быть не менее 6 символов");
+        return;
+      }
+      if (password !== passwordRepeat) {
+        setError("Пароли не совпадают");
+        return;
+      }
+
+      setLoading(true);
+      const ok = await register({
+        email,
+        password,
+        fullName: name || undefined,
+        role: "customer",
+      });
+      setLoading(false);
+
+      if (ok) {
+        router.push("/");
+      } else {
+        setError("Email уже зарегистрирован");
+      }
     },
-    [login, router],
+    [register, email, password, passwordRepeat, name, router]
   );
 
   return (
     <form className="mt-8 flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+      {error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="register-name" className={labelClass}>
           Имя
@@ -70,7 +100,7 @@ export default function RegisterForm(): React.ReactElement {
           autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Не менее 8 символов"
+          placeholder="Не менее 6 символов"
           className={fieldClass}
         />
       </div>
@@ -91,10 +121,20 @@ export default function RegisterForm(): React.ReactElement {
       </div>
       <button
         type="submit"
-        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-foreground shadow-[var(--shadow-card)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        disabled={loading}
+        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-foreground shadow-[var(--shadow-card)] transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
       >
-        <i className="fas fa-user-plus text-sm" aria-hidden />
-        Зарегистрироваться
+        {loading ? (
+          <>
+            <i className="fas fa-spinner fa-spin text-sm" aria-hidden />
+            Регистрация...
+          </>
+        ) : (
+          <>
+            <i className="fas fa-user-plus text-sm" aria-hidden />
+            Зарегистрироваться
+          </>
+        )}
       </button>
       <p className="text-center text-sm text-muted">
         Уже есть аккаунт?{" "}

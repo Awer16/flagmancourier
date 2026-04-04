@@ -18,18 +18,32 @@ export default function LoginForm(): React.ReactElement {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const onSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
+    async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      login();
-      router.push("/");
+      setError("");
+      setLoading(true);
+      const ok = await login(email, password);
+      setLoading(false);
+      if (ok) {
+        router.push("/");
+      } else {
+        setError("Неверный email или пароль");
+      }
     },
-    [login, router],
+    [login, email, password, router]
   );
 
   return (
     <form className="mt-8 flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+      {error && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="login-email" className={labelClass}>
           Электронная почта
@@ -76,10 +90,20 @@ export default function LoginForm(): React.ReactElement {
       </div>
       <button
         type="submit"
-        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-foreground shadow-[var(--shadow-card)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        disabled={loading}
+        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-foreground shadow-[var(--shadow-card)] transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
       >
-        <i className="fas fa-right-to-bracket text-sm" aria-hidden />
-        Войти
+        {loading ? (
+          <>
+            <i className="fas fa-spinner fa-spin text-sm" aria-hidden />
+            Вход...
+          </>
+        ) : (
+          <>
+            <i className="fas fa-right-to-bracket text-sm" aria-hidden />
+            Войти
+          </>
+        )}
       </button>
       <p className="text-center text-sm text-muted">
         Нет аккаунта?{" "}
