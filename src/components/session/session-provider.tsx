@@ -113,26 +113,36 @@ export default function SessionProvider({
       };
       setUser(userObj);
       setIsLoggedIn(true);
-      // Save to BOTH generic and role-specific keys
-      localStorage.setItem(keys.session, JSON.stringify({
+      // Save to BOTH generic and role-specific keys, both localStorage and sessionStorage
+      const sessionData = {
         isLoggedIn: true,
         phoneDigits: me.phone || "",
         userRole: role,
-      }));
+      };
+      localStorage.setItem(keys.session, JSON.stringify(sessionData));
+      if (storage) {
+        storage.setItem(keys.session, JSON.stringify(sessionData));
+      }
     } catch {
       // Token invalid — try all role keys for refresh
       const roles = ["customer", "courier", "company_owner", "enterprise", "moderator"];
       for (const role of roles) {
         const keys = getStorageKeys(role);
-        const refresh = localStorage.getItem(keys.refresh);
+        const refresh = localStorage.getItem(keys.refresh) || (storage?.getItem(keys.refresh) ?? null);
         if (refresh) {
           try {
             const tokens = await authApi.refreshToken(refresh);
-            // Save to both generic and role-specific
+            // Save to both generic and role-specific, both storage types
             localStorage.setItem(TOKEN_KEY, tokens.access_token);
             localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
             localStorage.setItem(keys.token, tokens.access_token);
             localStorage.setItem(keys.refresh, tokens.refresh_token);
+            if (storage) {
+              storage.setItem(TOKEN_KEY, tokens.access_token);
+              storage.setItem(REFRESH_KEY, tokens.refresh_token);
+              storage.setItem(keys.token, tokens.access_token);
+              storage.setItem(keys.refresh, tokens.refresh_token);
+            }
             const me = await authApi.getMe();
             setUser({
               id: me.id,
@@ -153,12 +163,21 @@ export default function SessionProvider({
       setUser(null);
       for (const role of roles) {
         const keys = getStorageKeys(role);
-        storage!.removeItem(keys.token);
-        storage!.removeItem(keys.refresh);
-        storage!.removeItem(keys.session);
+        localStorage.removeItem(keys.token);
+        localStorage.removeItem(keys.refresh);
+        localStorage.removeItem(keys.session);
+        if (storage) {
+          storage.removeItem(keys.token);
+          storage.removeItem(keys.refresh);
+          storage.removeItem(keys.session);
+        }
       }
-      storage!.removeItem(TOKEN_KEY);
-      storage!.removeItem(REFRESH_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(REFRESH_KEY);
+      if (storage) {
+        storage.removeItem(TOKEN_KEY);
+        storage.removeItem(REFRESH_KEY);
+      }
     }
   }, []);
 
@@ -166,9 +185,13 @@ export default function SessionProvider({
     async (email: string, password: string): Promise<boolean> => {
       try {
         const tokens = await authApi.login(email, password);
-        // Save to BOTH localStorage (persists) and sessionStorage (per-tab)
+        // Save to BOTH localStorage (persists) and sessionStorage (per-tab, used by api-client)
         localStorage.setItem(TOKEN_KEY, tokens.access_token);
         localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+        if (storage) {
+          storage.setItem(TOKEN_KEY, tokens.access_token);
+          storage.setItem(REFRESH_KEY, tokens.refresh_token);
+        }
         setIsLoggedIn(true);
         await refreshUser();
         return true;
@@ -202,6 +225,10 @@ export default function SessionProvider({
         // Save to BOTH localStorage and sessionStorage
         localStorage.setItem(TOKEN_KEY, tokens.access_token);
         localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+        if (storage) {
+          storage.setItem(TOKEN_KEY, tokens.access_token);
+          storage.setItem(REFRESH_KEY, tokens.refresh_token);
+        }
         setIsLoggedIn(true);
         await refreshUser();
         return true;

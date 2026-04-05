@@ -379,7 +379,8 @@ async def cancel_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status not in [OrderStatus.PENDING, OrderStatus.ACCEPTED]:
+    order_status = order.status.value if hasattr(order.status, 'value') else str(order.status)
+    if order_status not in ["pending", "accepted"]:
         raise HTTPException(status_code=400, detail="Cannot cancel order in this status")
 
     order.status = OrderStatus.CANCELLED

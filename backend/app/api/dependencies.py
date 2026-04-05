@@ -44,7 +44,11 @@ def require_role(*roles: str):
             "moderator": UserRole.MODERATOR,
         }
         required = [role_map[r] for r in roles]
-        if UserRole(current_user.role) not in required:
+        # Normalize: user.role may be enum or string
+        user_role = current_user.role.value if hasattr(current_user.role, 'value') else current_user.role
+        if isinstance(user_role, str):
+            user_role = UserRole(user_role)
+        if user_role not in required:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return current_user
     return dependency

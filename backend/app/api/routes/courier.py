@@ -65,14 +65,13 @@ async def end_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_dep)
 ):
-    # Check for active orders
+    # Check for active orders — statuses where courier is actively delivering
+    # Use string values since SQLAlchemy stores enum as strings with values_callable
+    active_statuses = ["accepted", "ready_for_pickup", "picked_up", "in_delivery"]
     active_result = await db.execute(
         select(Order).where(
             Order.courier_id == current_user.id,
-            Order.status.in_([
-                OrderStatus.ACCEPTED, OrderStatus.READY_FOR_PICKUP,
-                OrderStatus.PICKED_UP, OrderStatus.IN_DELIVERY
-            ])
+            Order.status.in_(active_statuses)
         )
     )
     if active_result.scalar_one_or_none():
@@ -120,22 +119,23 @@ async def get_available_orders(
     # Проверить активную сессию
     session = await _get_active_session(db, current_user.id)
 
-    # Проверить что курьер не занят другим заказом
+    # Проверить что курьер не занят другим заказом (максимум 1 активный заказ)
     busy = await db.execute(
         select(Order).where(
             Order.courier_id == current_user.id,
-            Order.status.in_([OrderStatus.ACCEPTED, OrderStatus.PICKED_UP, OrderStatus.IN_DELIVERY])
+            Order.status.in_(["accepted", "picked_up", "in_delivery"])
         )
     )
     if busy.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Already have an active delivery")
+        raise HTTPException(status_code=400, detail="У вас уже есть активный заказ. Завершите текущую доставку, прежде чем брать новый.")
 
-    # Доступные заказы — подтверждённые рестораном (confirmed)
+    # Доступные заказы — подтверждённые рестораном
+    # confirmed — ресторан принял, ready_for_pickup — готов к выдаче
     query = (
         select(Order, Company.name, Company.address, Company.city)
         .select_from(Order)
         .join(Company, Order.company_id == Company.id)
-        .where(Order.status.in_([OrderStatus.CONFIRMED, OrderStatus.ACCEPTED, OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP]))
+        .where(Order.status.in_(["confirmed", "ready_for_pickup"]))
     )
 
     # Фильтр по городу курьера
@@ -175,7 +175,9 @@ async def accept_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status not in [OrderStatus.CONFIRMED, OrderStatus.ACCEPTED]:
+
+    order_status = order.status.value if hasattr(order.status, 'value') else str(order.status)
+    if order_status not in ["confirmed", "accepted"]:
         raise HTTPException(status_code=400, detail="Order not available")
 
     order.courier_id = current_user.id
@@ -214,8 +216,9 @@ async def update_order_status(
         raise HTTPException(status_code=400, detail=f"Invalid status. Use: {list(status_map.keys())}")
 
     # Курьер может обновить статус только если заказ уже готов (ready_for_pickup) или если он его забрал
-    if order.status not in [OrderStatus.READY_FOR_PICKUP, OrderStatus.PICKED_UP, OrderStatus.IN_DELIVERY]:
-        raise HTTPException(status_code=400, detail=f"Cannot update status from {order.status.value if hasattr(order.status, 'value') else order.status}")
+    current_status = order.status.value if hasattr(order.status, 'value') else str(order.status)
+    if current_status not in ["ready_for_pickup", "picked_up", "in_delivery"]:
+        raise HTTPException(status_code=400, detail=f"Cannot update status from {current_status}")
 
     order.status = status_map[status_new]
     
@@ -246,7 +249,7 @@ async def get_completed_orders(
     result = await db.execute(
         select(Order).where(
             Order.courier_id == current_user.id,
-            Order.status == OrderStatus.DELIVERED
+            Order.status == "delivered"
         ).order_by(Order.created_at.desc())
     )
     orders = result.scalars().all()
@@ -261,7 +264,7 @@ async def get_my_orders(
     result = await db.execute(
         select(Order).where(
             Order.courier_id == current_user.id,
-            Order.status.in_([OrderStatus.SEARCHING_COURIER, OrderStatus.ACCEPTED, OrderStatus.PICKED_UP, OrderStatus.IN_DELIVERY])
+            Order.status.in_(["accepted", "ready_for_pickup", "picked_up", "in_delivery"])
         ).order_by(Order.created_at.desc())
     )
     orders = result.scalars().all()

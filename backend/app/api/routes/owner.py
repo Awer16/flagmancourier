@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
-from app.models import Company, MenuItem, DeliveryZone, Order, User, ModerationStatus
+from app.models import Company, MenuItem, DeliveryZone, Order, User, ModerationStatus, OrderStatus
 from app.schemas import (
     CompanyCreate, CompanyUpdate, CompanyResponse,
     MenuItemCreate, MenuItemUpdate, MenuItemResponse,
@@ -237,17 +237,23 @@ async def confirm_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    
+
+    # Normalize role - may be enum or string depending on SQLAlchemy version
+    user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+
     # Enterprise users can confirm any pending order
-    if current_user.role.value == "company_owner":
+    if user_role == "company_owner":
         company_result = await db.execute(select(Company).where(Company.id == order.company_id, Company.owner_id == current_user.id))
         company = company_result.scalar_one_or_none()
         if not company:
             raise HTTPException(status_code=403, detail="Access denied")
-        
-    if order.status != OrderStatus.PENDING:
-        raise HTTPException(status_code=400, detail=f"Order cannot be confirmed (current status: {order.status.value if hasattr(order.status, 'value') else order.status})")
-        
+
+    # Get order status as string for comparison
+    order_status = order.status.value if hasattr(order.status, 'value') else str(order.status)
+
+    if order_status != "pending":
+        raise HTTPException(status_code=400, detail=f"Order cannot be confirmed (current status: {order_status})")
+
     order.status = OrderStatus.CONFIRMED
     await db.flush()
     await db.refresh(order)
@@ -264,16 +270,17 @@ async def order_ready_for_pickup(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    
+
     # Check if order belongs to one of the user's companies
     company_result = await db.execute(select(Company).where(Company.id == order.company_id, Company.owner_id == current_user.id))
     company = company_result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=403, detail="Access denied")
-        
-    if order.status != OrderStatus.ACCEPTED:
-        raise HTTPException(status_code=400, detail=f"Курьер ещё не принял заказ (текущий статус: {order.status.value if hasattr(order.status, 'value') else order.status})")
-        
+
+    order_status = order.status.value if hasattr(order.status, 'value') else str(order.status)
+    if order_status not in ["accepted", "confirmed"]:
+        raise HTTPException(status_code=400, detail=f"Заказ ещё не готов к выдаче (текущий статус: {order_status})")
+
     order.status = OrderStatus.READY_FOR_PICKUP
     await db.flush()
     await db.refresh(order)
