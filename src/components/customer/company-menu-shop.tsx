@@ -1,11 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MenuItem } from "@/shared/types/customer";
+import { customerApi } from "@/lib/api-client";
+import { menuItemToFrontend } from "@/lib/api-adapters";
+import { useCustomerAddress } from "@/components/customer/customer-address-provider";
+import { useSession } from "@/components/session/session-context";
 
 interface CompanyMenuShopProps {
-  menu: MenuItem[];
+  companyId: string;
+  companyName?: string;
 }
 
 function formatRub(n: number): string {
@@ -23,10 +29,7 @@ function groupByCategory(items: MenuItem[]): Map<string, MenuItem[]> {
 }
 
 function isPromoItem(item: MenuItem): boolean {
-  return (
-    item.oldPrice != null &&
-    item.oldPrice > item.price
-  );
+  return item.oldPrice != null && item.oldPrice > item.price;
 }
 
 function discountPercent(item: MenuItem): number {
@@ -37,20 +40,47 @@ function discountPercent(item: MenuItem): number {
 }
 
 export default function CompanyMenuShop({
-  menu,
+  companyId,
+  companyName,
 }: CompanyMenuShopProps): React.ReactElement {
+  const { location } = useCustomerAddress();
+  const { isLoggedIn } = useSession();
+  const router = useRouter();
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [qtyById, setQtyById] = useState<Record<string, number>>({});
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoResult, setPromoResult] = useState<{ valid: boolean; discount_percent: string | null; final_amount: string | null; error: string | null } | null>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
+  // Address details
+  const [aptFloor, setAptFloor] = useState("");
+  const [aptEntrance, setAptEntrance] = useState("");
+  const [aptApartment, setAptApartment] = useState("");
+  const [aptComment, setAptComment] = useState("");
 
-  const promoItems = useMemo(
-    () => menu.filter(isPromoItem),
-    [menu],
-  );
+  useEffect(() => {
+    setLoading(true);
+    customerApi
+      .getCompanyMenu(companyId)
+      .then((items) => {
+        setMenu(items.map(menuItemToFrontend));
+      })
+      .catch((err) => {
+        console.error("Failed to load menu:", err);
+        setMenu([]);
+      })
+      .finally(() => setLoading(false));
+  }, [companyId]);
+
+  const promoItems = useMemo(() => menu.filter(isPromoItem), [menu]);
 
   const grouped = useMemo(() => groupByCategory(menu), [menu]);
 
   const categories = useMemo(
     () => [...grouped.keys()].sort((a, b) => a.localeCompare(b, "ru")),
-    [grouped],
+    [grouped]
   );
 
   const addOne = useCallback((id: string) => {
@@ -73,18 +103,101 @@ export default function CompanyMenuShop({
     });
   }, []);
 
-  const { totalQty, totalSum } = useMemo(() => {
+  const { totalQty, totalSum, cartItems } = useMemo(() => {
     let q = 0;
     let sum = 0;
+    const items: { menu_item_id: string; quantity: number }[] = [];
     for (const item of menu) {
       const n = qtyById[item.id] ?? 0;
       if (n > 0) {
         q += n;
         sum += n * item.price;
+        items.push({ menu_item_id: item.id, quantity: n });
       }
     }
-    return { totalQty: q, totalSum: sum };
+    return { totalQty: q, totalSum: sum, cartItems: items };
   }, [menu, qtyById]);
+
+  const validatePromo = useCallback(async () => {
+    if (!promoCode.trim()) return;
+    setValidatingPromo(true);
+    try {
+      const result = await customerApi.validatePromoCode({
+        code: promoCode.trim(),
+        company_id: companyId,
+        order_amount: String(totalSum),
+      });
+      setPromoResult(result);
+    } catch {
+      setPromoResult({ valid: false, discount_percent: null, final_amount: null, error: "Ошибка проверки" });
+    }
+    setValidatingPromo(false);
+  }, [promoCode, companyId, totalSum]);
+
+  const placeOrder = useCallback(async () => {
+    if (!isLoggedIn) {
+      alert("Войдите в аккаунт для оформления заказа");
+      return;
+    }
+    if (cartItems.length === 0) return;
+
+    setPlacingOrder(true);
+    try {
+      // Try to use saved address or create one from current location
+      let addressId: string | undefined;
+      try {
+        const addresses = await customerApi.getAddresses();
+        addressId = addresses[0]?.id;
+      } catch {
+        // not authenticated or error
+      }
+
+      if (!addressId && location.label) {
+        try {
+          const addr = await customerApi.createAddress({
+            address: location.label,
+            latitude: String(location.lat),
+            longitude: String(location.lon),
+            floor: aptFloor || undefined,
+            apartment: aptApartment || undefined,
+            comment: aptComment || undefined,
+          });
+          addressId = addr.id;
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!addressId) {
+        alert("Укажите адрес доставки");
+        setPlacingOrder(false);
+        return;
+      }
+
+      const currentPromoResult = promoResult;
+      const order = await customerApi.createOrder({
+        company_id: companyId,
+        delivery_address_id: addressId,
+        items: cartItems,
+        promo_code: currentPromoResult?.valid ? promoCode.trim() : undefined,
+      });
+
+      setQtyById({});
+      setShowCheckout(false);
+      setPromoCode("");
+      setPromoResult(null);
+      setAptFloor("");
+      setAptEntrance("");
+      setAptApartment("");
+      setAptComment("");
+
+      // Redirect to order tracking
+      router.push(`/customer/orders/${order.id}`);
+    } catch (err: any) {
+      alert("Ошибка при оформлении: " + (err.message || "Неизвестная ошибка"));
+    }
+    setPlacingOrder(false);
+  }, [isLoggedIn, cartItems, companyId, location, promoCode, promoResult]);
 
   const renderCard = (item: MenuItem): React.ReactElement => {
     const qty = qtyById[item.id] ?? 0;
@@ -163,10 +276,7 @@ export default function CompanyMenuShop({
   const renderPromoSlide = (item: MenuItem): React.ReactElement => {
     const pct = discountPercent(item);
     return (
-      <div
-        key={`promo-${item.id}`}
-        className="w-[min(100%,280px)] shrink-0 snap-start"
-      >
+      <div key={`promo-${item.id}`} className="w-[min(100%,280px)] shrink-0 snap-start">
         <div className="overflow-hidden rounded-2xl border border-primary/25 bg-card shadow-[var(--shadow-card)]">
           <div className="relative aspect-[16/10] w-full bg-border-soft/40">
             {item.imageUrl ? (
@@ -187,9 +297,7 @@ export default function CompanyMenuShop({
             </span>
           </div>
           <div className="space-y-2 p-3">
-            <p className="font-medium leading-snug text-foreground">
-              {item.name}
-            </p>
+            <p className="font-medium leading-snug text-foreground">{item.name}</p>
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs text-muted line-through">
@@ -212,6 +320,23 @@ export default function CompanyMenuShop({
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <i className="fas fa-spinner fa-spin text-3xl text-primary" />
+      </div>
+    );
+  }
+
+  if (menu.length === 0) {
+    return (
+      <div className="py-12 text-center text-muted">
+        <i className="fas fa-utensils text-4xl mb-3 block" />
+        <p>Меню пока пусто</p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative pb-24">
@@ -259,6 +384,7 @@ export default function CompanyMenuShop({
             </div>
             <button
               type="button"
+              onClick={() => setShowCheckout(true)}
               className="shrink-0 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
             >
               Оформить
@@ -266,6 +392,132 @@ export default function CompanyMenuShop({
           </div>
         </div>
       ) : null}
+
+      {/* Checkout Modal */}
+      {showCheckout && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+          <div className="w-full max-w-md rounded-t-2xl bg-card p-6 shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Оформление заказа</h3>
+              <button onClick={() => setShowCheckout(false)} className="text-muted hover:text-foreground">
+                <i className="fas fa-times" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              {/* Address */}
+              <div className="rounded-xl border border-border-soft bg-border-soft/10 p-3">
+                <p className="text-sm font-medium text-foreground mb-2">
+                  <i className="fas fa-map-marker-alt mr-1 text-primary" /> Адрес доставки
+                </p>
+                <p className="text-sm text-muted">{location.label || "Не указан"}</p>
+              </div>
+
+              {/* Address details */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-foreground">Подъезд</label>
+                  <input
+                    value={aptEntrance}
+                    onChange={(e) => setAptEntrance(e.target.value)}
+                    placeholder="1"
+                    className="w-full rounded-xl border border-border-soft bg-background px-2 py-2 text-sm text-foreground placeholder:text-muted outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-foreground">Этаж</label>
+                  <input
+                    value={aptFloor}
+                    onChange={(e) => setAptFloor(e.target.value)}
+                    placeholder="5"
+                    className="w-full rounded-xl border border-border-soft bg-background px-2 py-2 text-sm text-foreground placeholder:text-muted outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-foreground">Квартира</label>
+                  <input
+                    value={aptApartment}
+                    onChange={(e) => setAptApartment(e.target.value)}
+                    placeholder="42"
+                    className="w-full rounded-xl border border-border-soft bg-background px-2 py-2 text-sm text-foreground placeholder:text-muted outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">Комментарий курьеру</label>
+                <input
+                  value={aptComment}
+                  onChange={(e) => setAptComment(e.target.value)}
+                  placeholder="Код домофона, ориентиры..."
+                  className="w-full rounded-xl border border-border-soft bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted outline-none focus:border-primary"
+                />
+              </div>
+
+              {/* Order items */}
+              <div className="rounded-xl border border-border-soft bg-border-soft/10 p-3">
+                <p className="text-sm text-muted mb-2">Товары</p>
+                {cartItems.map((ci) => {
+                  const item = menu.find((m) => m.id === ci.menu_item_id);
+                  return item ? (
+                    <div key={ci.menu_item_id} className="flex justify-between text-sm text-foreground py-1">
+                      <span>{item.name} x{ci.quantity}</span>
+                      <span>{formatRub(item.price * ci.quantity)}</span>
+                    </div>
+                  ) : null;
+                })}
+              </div>
+              <div className="flex items-center justify-between border-t border-border-soft pt-3">
+                <span className="font-semibold text-foreground">Итого:</span>
+                <span className="text-lg font-bold text-primary">
+                  {promoResult?.valid && promoResult.final_amount ? (
+                    <>
+                      <span className="text-sm text-muted line-through mr-2">{formatRub(totalSum)}</span>
+                      {formatRub(parseFloat(promoResult.final_amount))}
+                    </>
+                  ) : (
+                    formatRub(totalSum)
+                  )}
+                </span>
+              </div>
+              {/* Promo code */}
+              <div className="flex gap-2">
+                <input
+                  value={promoCode}
+                  onChange={(e) => { setPromoCode(e.target.value); setPromoResult(null); }}
+                  placeholder="Промокод"
+                  className="flex-1 rounded-xl border border-border-soft bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+                />
+                <button
+                  onClick={validatePromo}
+                  disabled={validatingPromo || !promoCode.trim()}
+                  className="rounded-xl border border-border-soft bg-border-soft/15 px-3 py-2 text-sm text-foreground transition-colors hover:border-primary/50 disabled:opacity-50"
+                >
+                  {validatingPromo ? <i className="fas fa-spinner fa-spin" /> : "OK"}
+                </button>
+              </div>
+              {promoResult && (
+                <p className={`text-sm ${promoResult.valid ? "text-green-500" : "text-red-400"}`}>
+                  {promoResult.valid ? (
+                    <>✓ Скидка {promoResult.discount_percent}% — {formatRub(parseFloat(promoResult.final_amount!))}</>
+                  ) : (
+                    <>✗ {promoResult.error}</>
+                  )}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={placeOrder}
+              disabled={placingOrder}
+              className="mt-4 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {placingOrder ? (
+                <><i className="fas fa-spinner fa-spin mr-2" /> Оформляем...</>
+              ) : (
+                <><i className="fas fa-check mr-2" /> Подтвердить заказ</>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

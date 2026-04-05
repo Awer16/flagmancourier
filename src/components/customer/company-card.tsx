@@ -8,9 +8,10 @@ interface CompanyCardProps {
 export default function CompanyCard({
   company,
 }: CompanyCardProps): React.ReactElement {
+  const linkTarget = company.slug || company.id;
   return (
     <Link
-      href={`/customer/${company.id}`}
+      href={`/customer/${linkTarget}`}
       className="block rounded-2xl border border-border-soft bg-card p-4 shadow-[var(--shadow-card)] transition-shadow duration-200 hover:shadow-[var(--shadow-card-hover)]"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

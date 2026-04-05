@@ -14,9 +14,11 @@ export default function RegisterForm(): React.ReactElement {
   const router = useRouter();
   const { register } = useSession();
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordRepeat, setPasswordRepeat] = useState("");
+  const [role, setRole] = useState("customer");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -39,17 +41,24 @@ export default function RegisterForm(): React.ReactElement {
         email,
         password,
         fullName: name || undefined,
-        role: "customer",
+        phone: phone || undefined,
+        role,
       });
       setLoading(false);
 
       if (ok) {
-        router.push("/");
+        if (role === "company_owner") {
+          router.push("/owner");
+        } else if (role === "courier") {
+          router.push("/courier");
+        } else {
+          router.push("/");
+        }
       } else {
         setError("Email уже зарегистрирован");
       }
     },
-    [register, email, password, passwordRepeat, name, router]
+    [register, email, password, passwordRepeat, name, phone, role, router]
   );
 
   return (
@@ -71,6 +80,21 @@ export default function RegisterForm(): React.ReactElement {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Как к вам обращаться"
+          className={fieldClass}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="register-phone" className={labelClass}>
+          Телефон
+        </label>
+        <input
+          id="register-phone"
+          name="phone"
+          type="tel"
+          autoComplete="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+7 (999) 123-45-67"
           className={fieldClass}
         />
       </div>
@@ -119,6 +143,33 @@ export default function RegisterForm(): React.ReactElement {
           className={fieldClass}
         />
       </div>
+
+      {/* Role selector */}
+      <div className="flex flex-col gap-1.5">
+        <label className={labelClass}>Роль</label>
+        <div className="flex gap-2">
+          {[
+            { value: "customer", label: "Покупатель", icon: "fa-user" },
+            { value: "company_owner", label: "Владелец", icon: "fa-store" },
+            { value: "courier", label: "Курьер", icon: "fa-bicycle" },
+          ].map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              onClick={() => setRole(r.value)}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+                role === r.value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border-soft bg-background text-muted hover:border-primary/50"
+              }`}
+            >
+              <i className={`fas ${r.icon} text-xs`} />
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <button
         type="submit"
         disabled={loading}

@@ -15,19 +15,35 @@ import {
   useState,
 } from "react";
 
-const STORAGE_KEY = "courier-here-session";
+const TOKEN_KEY = "auth_token";
+const REFRESH_KEY = "auth_refresh";
+const STORAGE_KEY_PREFIX = "courier-here-session";
+
+// Use sessionStorage so each tab has its own session
+const storage = typeof window !== "undefined" ? sessionStorage : null;
 
 interface StoredPayload {
   isLoggedIn?: unknown;
-  phoneDigits?: unknown;
+  phoneDigits?: string;
+  userRole?: string;
 }
 
-function readStored(): { isLoggedIn: boolean; phoneDigits: string } {
-  if (typeof window === "undefined") {
+function getStorageKeys(role?: string): { token: string; refresh: string; session: string } {
+  const suffix = role ? `_${role}` : "";
+  return {
+    token: `${TOKEN_KEY}${suffix}`,
+    refresh: `${REFRESH_KEY}${suffix}`,
+    session: `${STORAGE_KEY_PREFIX}${suffix}`,
+  };
+}
+
+function readStored(role?: string): { isLoggedIn: boolean; phoneDigits: string } {
+  if (!storage) {
     return { isLoggedIn: false, phoneDigits: "" };
   }
+  const keys = getStorageKeys(role);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(keys.session);
     if (!raw) {
       return { isLoggedIn: false, phoneDigits: "" };
     }
@@ -55,6 +71,7 @@ export default function SessionProvider({
   const [profileOpen, setProfileOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
+  // Read stored session (without role first, then after login we use role-specific keys)
   useEffect(() => {
     const s = readStored();
     setIsLoggedIn(s.isLoggedIn);
@@ -62,7 +79,7 @@ export default function SessionProvider({
     setHydrated(true);
   }, []);
 
-  // Если есть сессия — пробуем получить данные с бэкенда
+  // Если есть токен — пробуем получить данные с бэкенда
   useEffect(() => {
     if (!hydrated || !isLoggedIn) return;
     refreshUser();
@@ -71,43 +88,87 @@ export default function SessionProvider({
 
   useEffect(() => {
     if (!hydrated) return;
+    const keys = getStorageKeys(user?.role);
     try {
       localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ isLoggedIn, phoneDigits })
+        keys.session,
+        JSON.stringify({ isLoggedIn, phoneDigits, userRole: user?.role })
       );
     } catch {
       /* ignore */
     }
-  }, [isLoggedIn, phoneDigits, hydrated]);
+  }, [isLoggedIn, phoneDigits, hydrated, user?.role]);
 
   const refreshUser = useCallback(async () => {
     try {
       const me = await authApi.getMe();
-      setUser({
+      const role = me.role as UserProfile["role"];
+      const keys = getStorageKeys(role);
+      const userObj: UserProfile = {
         id: me.id,
         email: me.email,
-        fullName: me.full_name,
+        fullName: me.first_name + (me.last_name ? ` ${me.last_name}` : ""),
         phone: me.phone,
-        role: me.role,
-      });
+        role,
+      };
+      setUser(userObj);
       setIsLoggedIn(true);
+      // Save to BOTH generic and role-specific keys
+      localStorage.setItem(keys.session, JSON.stringify({
+        isLoggedIn: true,
+        phoneDigits: me.phone || "",
+        userRole: role,
+      }));
     } catch {
-      // Сессия невалидна — разлогиниваем
+      // Token invalid — try all role keys for refresh
+      const roles = ["customer", "courier", "company_owner", "enterprise", "moderator"];
+      for (const role of roles) {
+        const keys = getStorageKeys(role);
+        const refresh = localStorage.getItem(keys.refresh);
+        if (refresh) {
+          try {
+            const tokens = await authApi.refreshToken(refresh);
+            // Save to both generic and role-specific
+            localStorage.setItem(TOKEN_KEY, tokens.access_token);
+            localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+            localStorage.setItem(keys.token, tokens.access_token);
+            localStorage.setItem(keys.refresh, tokens.refresh_token);
+            const me = await authApi.getMe();
+            setUser({
+              id: me.id,
+              email: me.email,
+              fullName: me.first_name + (me.last_name ? ` ${me.last_name}` : ""),
+              phone: me.phone,
+              role: me.role as UserProfile["role"],
+            });
+            setIsLoggedIn(true);
+            return;
+          } catch {
+            // continue to next role
+          }
+        }
+      }
+      // All failed — clear all sessions
       setIsLoggedIn(false);
       setUser(null);
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {
-        /* ignore */
+      for (const role of roles) {
+        const keys = getStorageKeys(role);
+        storage!.removeItem(keys.token);
+        storage!.removeItem(keys.refresh);
+        storage!.removeItem(keys.session);
       }
+      storage!.removeItem(TOKEN_KEY);
+      storage!.removeItem(REFRESH_KEY);
     }
   }, []);
 
   const login = useCallback(
     async (email: string, password: string): Promise<boolean> => {
       try {
-        await authApi.login(email, password);
+        const tokens = await authApi.login(email, password);
+        // Save to BOTH localStorage (persists) and sessionStorage (per-tab)
+        localStorage.setItem(TOKEN_KEY, tokens.access_token);
+        localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
         setIsLoggedIn(true);
         await refreshUser();
         return true;
@@ -128,13 +189,19 @@ export default function SessionProvider({
       role?: string;
     }): Promise<boolean> => {
       try {
-        const result = await authApi.register({
+        const nameParts = (data.fullName || "").trim().split(/\s+/);
+        const role = data.role || "customer";
+        const tokens = await authApi.register({
           email: data.email,
           password: data.password,
-          full_name: data.fullName,
-          phone: data.phone,
-          role: (data.role as any) || "customer",
+          phone: data.phone || "",
+          first_name: nameParts[0] || "User",
+          last_name: nameParts.slice(1).join(" ") || undefined,
+          role,
         });
+        // Save to BOTH localStorage and sessionStorage
+        localStorage.setItem(TOKEN_KEY, tokens.access_token);
+        localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
         setIsLoggedIn(true);
         await refreshUser();
         return true;
@@ -147,20 +214,21 @@ export default function SessionProvider({
   );
 
   const logout = useCallback(async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      /* ignore */
+    // Clear role-specific keys
+    const roles = ["customer", "courier", "company_owner", "enterprise", "moderator"];
+    for (const role of roles) {
+      const keys = getStorageKeys(role);
+      localStorage.removeItem(keys.token);
+      localStorage.removeItem(keys.refresh);
+      localStorage.removeItem(keys.session);
     }
+    // Also clear generic keys
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
     setIsLoggedIn(false);
     setUser(null);
     setPhoneDigits("");
     setProfileOpen(false);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
   }, []);
 
   const openProfile = useCallback(() => {

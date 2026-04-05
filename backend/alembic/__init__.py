@@ -1,0 +1,5 @@
+# Alembic Script Configuration
+[alembic]
+script_location = alembic
+prepend_sys_path = .
+version_path_separator = os

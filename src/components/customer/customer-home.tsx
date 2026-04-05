@@ -12,6 +12,9 @@ import CustomerDeliveryCityBlock from "@/components/customer/customer-delivery-c
 import { getCityById } from "@/lib/cities";
 import { findNearestCityId } from "@/lib/geo";
 import { getAllNearbyCompanies } from "@/lib/mock-companies";
+import { customerApi, publicApi } from "@/lib/api-client";
+import { companyToFrontend } from "@/lib/api-adapters";
+import type { Company } from "@/shared/types/customer";
 
 const AddressMapPicker = dynamic(
   () => import("@/components/map/address-map-picker"),
@@ -35,7 +38,39 @@ export default function CustomerHome(): React.ReactElement {
     useCustomerAddress();
   const [addressEditing, setAddressEditing] = useState(false);
   const [guestMapPickActive, setGuestMapPickActive] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
   const city = getCityById(cityId);
+
+  // Загрузка компаний с бэкенда + fallback на мок-данные
+  useEffect(() => {
+    setLoadingCompanies(true);
+    // Определяем какой город использовать для фильтра
+    const backendCity = city?.name || "Ростов-на-Дону";
+
+    publicApi
+      .getCompanies(backendCity)
+      .then((backendCompanies) => {
+        if (backendCompanies.length > 0) {
+          const enriched = backendCompanies.map((bc) => {
+            return companyToFrontend(bc, []);
+          });
+          setCompanies(enriched);
+        } else {
+          // Backend вернул пустой массив — используем мок-данные
+          const mock = getAllNearbyCompanies(location.lat, location.lon, cityId);
+          setCompanies(mock);
+        }
+      })
+      .catch((err) => {
+        console.warn("Backend недоступен, используем мок-данные:", err);
+        const mock = getAllNearbyCompanies(location.lat, location.lon, cityId);
+        setCompanies(mock);
+      })
+      .finally(() => setLoadingCompanies(false));
+  }, [cityId, location.lat, location.lon]);
+
   const {
     snap,
     dragging,
@@ -130,10 +165,12 @@ export default function CustomerHome(): React.ReactElement {
 
   const mapPickMode = addressEditing || guestMapPickActive;
 
-  const nearbyCompanies = useMemo(
-    () => getAllNearbyCompanies(location.lat, location.lon, cityId),
-    [location.lat, location.lon, cityId],
-  );
+  // Объединяем компании с мок-данными если бэкенд недоступен
+  const displayCompanies = useMemo(() => {
+    if (companies.length > 0) return companies;
+    // ALWAYS fallback to mock if backend returned empty
+    return getAllNearbyCompanies(location.lat, location.lon, cityId);
+  }, [companies, location.lat, location.lon, cityId]);
 
   const mapZoom = city?.zoom ?? 12;
 
@@ -216,9 +253,7 @@ export default function CustomerHome(): React.ReactElement {
           </div>
           <div
             aria-hidden={contentHidden}
-            className={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 sm:gap-4 sm:px-5 ${
-              contentHidden ? "pointer-events-none opacity-0" : "opacity-100"
-            }`}
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 sm:gap-4 sm:px-5"
           >
             <div className="shrink-0">
               <h1 className="font-heading text-xl font-bold text-foreground sm:text-2xl">
@@ -317,14 +352,18 @@ export default function CustomerHome(): React.ReactElement {
               <h2 className="font-heading text-base font-semibold text-foreground sm:text-lg">
                 Заведения рядом
               </h2>
-              {nearbyCompanies.length === 0 ? (
+              {loadingCompanies ? (
+                <div className="flex items-center justify-center py-8">
+                  <i className="fas fa-spinner fa-spin text-2xl text-primary" />
+                </div>
+              ) : displayCompanies.length === 0 ? (
                 <p className="mt-3 text-sm text-muted">
                   В выбранном городе и радиусе доставки заведений не найдено.
                   Смените город или укажите точку на карте ближе к центру.
                 </p>
               ) : (
                 <ul className="mt-2 flex flex-col gap-2 sm:mt-3 sm:gap-3">
-                  {nearbyCompanies.map((company) => (
+                  {displayCompanies.map((company) => (
                     <li key={company.id}>
                       <CompanyCard company={company} />
                     </li>

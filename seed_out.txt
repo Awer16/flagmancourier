@@ -1,0 +1,9 @@
+============================================================
+  TEST USERS
+============================================================
+2026-04-05 04:49:17,713 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-04-05 04:49:17,718 INFO sqlalchemy.engine.Engine SELECT users.email, users.password_hash, users.phone, users.first_name, users.last_name, users.role, users.moderation_status, users.refresh_token, users.refresh_token_expiry, users.is_blocked, users.balance, users.id, users.created_at, users.updated_at 
+FROM users 
+WHERE users.email = ?
+2026-04-05 04:49:17,718 INFO sqlalchemy.engine.Engine [generated in 0.00018s] ('customer@test.com',)
+2026-04-05 04:49:17,720 INFO sqlalchemy.engine.Engine ROLLBACK

@@ -3,11 +3,11 @@
 import { createContext, useContext } from "react";
 
 export interface UserProfile {
-  id: number;
+  id: string;
   email: string;
   fullName: string | null;
   phone: string | null;
-  role: string;
+  role: "customer" | "courier" | "company_owner" | "enterprise" | "moderator";
 }
 
 export interface SessionContextValue {
